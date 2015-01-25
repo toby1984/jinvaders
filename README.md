@@ -35,7 +35,7 @@ mvn clean package exec:java
 Playing
 =======
 
-Use the <A> and <D> keys to move left/right , hit <SPACE> to shoot. Hit <ENTER> to start a new game after you lost.
+Use the 'A' and 'D' keys to move left/right , hit 'SPACE' to shoot. Press 'ENTER' to start a new game after you lost.
 
 Known issues
 ============
