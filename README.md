@@ -2,6 +2,8 @@
 
 A crude Space Invaders clone programmed in Java.
 
+<img src="https://raw.githubusercontent.com/toby1984/jinvaders/master/screenshot.png" width="640" height="480" />
+
 Attribution
 ===========
 
