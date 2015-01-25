@@ -8,10 +8,14 @@ Attribution
 ===========
 
 The nice-looking retro font was released under the SIL Open Font License V1.1 and is (c) 2011 by Cody "CodeMan38" Boisclair (cody@zone38.net).
-I downloaded the nice retro sound effects from www.freesounds.org , authors are
+I downloaded the retro sound effects from www.freesounds.org , authors are
 
-- player laser sound: http://www.freesound.org/people/inferno/
-- 'life lost' sound: https://www.freesound.org/people/killkhan/
+- http://www.freesound.org/people/killkhan : explosion-3.mp3
+- http://www.freesound.org/people/inferno : smalllas.wav
+- http://www.freesound.org/people/soundslikewillem : laser-gun.wav
+- http://www.freesound.org/people/coby12388 : bombhit01.wav
+- http://www.freesound.org/people/themusicalnomad : negative-beeps.wav
+- http://www.freesound.org/people/snipperbes : classiclaser.wav
 
 Requirements
 ============
@@ -40,5 +44,6 @@ Here's a list of known issues I might (or might not) fix:
   collision detection never triggers on bullets fired  by invaders that hit another invader. This obviously sometimes
   leads to visual glitches were shots are flying through invaders...
 - When the player shoots while right below a barrier, the shots are invisible (the barrier gets properly destroyed though)
-- Difficulty is kind'a wonky and probably needs adjusting.
+- Difficulty is kind'a wonky and probably needs adjusting
+- Sprites look atrocious (I'd gladly accept contributions though ;)
 
