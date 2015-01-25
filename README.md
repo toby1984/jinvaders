@@ -1,6 +1,6 @@
 # jinvaders
 
-A crude Space Invaders clone programmed in Java. I got inspired by a [http://vimeo.com/105955605|great talk by Mary Rose Cook] ... Javascript is still an atrocious language though :D
+A crude Space Invaders clone programmed in Java. I got inspired by [a great talk by Mary Rose Cook](http://vimeo.com/105955605) ... Javascript is still an atrocious language though :D
 
 <img src="https://raw.githubusercontent.com/toby1984/jinvaders/master/screenshot.png" width="640" height="480" />
 
