@@ -20,6 +20,7 @@ I downloaded the retro sound effects from www.freesounds.org , authors are
 - http://www.freesound.org/people/coby12388 : bombhit01.wav
 - http://www.freesound.org/people/themusicalnomad : negative-beeps.wav
 - http://www.freesound.org/people/snipperbes : classiclaser.wav
+- http://www.freesound.org/people/suntemple: retro-accomplished-sfx.wav
 
 Requirements
 ============
