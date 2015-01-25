@@ -7,7 +7,11 @@ A crude Space Invaders clone programmed in Java.
 Attribution
 ===========
 
+## Font
 The nice-looking retro font was released under the SIL Open Font License V1.1 and is (c) 2011 by Cody "CodeMan38" Boisclair (cody@zone38.net).
+
+## Sound effects
+
 I downloaded the retro sound effects from www.freesounds.org , authors are
 
 - http://www.freesound.org/people/killkhan : explosion-3.mp3
