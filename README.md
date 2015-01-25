@@ -42,6 +42,8 @@ Known issues
 
 Here's a list of known issues I might (or might not) fix:
 
+- Everything got stuffed into a single file since I initially tried to come up with something as short (or at least close to) what Mary Rose Cook did with Javascript+Canvas ... but then feature creep set in and I abandonded this plan but left all the code  
+- Main loop method is a mess since I kept adding features and didn't bother to clean it up
 - The algorithm that checks whether it's safe for an invader to shoot (making sure that none of its collegues is in the way)
   is quite naive and just makes sure that there's no other invader right below. Invaders might still get hit by
   friendly fire when they advance horizontally into a bullet. To work around this I currently made sure that the 
