@@ -18,11 +18,12 @@ package de.codesourcery.jinvaders;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.font.LineMetrics;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
@@ -43,65 +45,81 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineUnavailableException;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
 public class Main
 {
+	// total size of screen
 	protected static final Dimension SCREEN_SIZE = new Dimension(800,600);
 
-	protected static final Dimension VIEWPORT_SIZE = new Dimension(800,500);
+	// part of screen where we're going to draw the game action
+	// (=> screen minus HUD below it)
+	protected static final Rectangle VIEWPORT = new Rectangle(0,100,800,SCREEN_SIZE.height - 100 );
 
 	protected static final int INVADERS_PER_ROW = 8;
 
 	protected static final int ROWS_OF_INVADERS = 5;
 
+	protected static final int BARRICADE_COUNT = 5;
+
+	protected static final Color BACKGROUND_COLOR = Color.BLACK;
+
+	// entity velocities
 	protected static final Vec2d INITIAL_INVADER_VELOCITY = new Vec2d(2,1);
 	protected static final Vec2d CURRENT_INVADER_VELOCITY = new Vec2d(INITIAL_INVADER_VELOCITY);
-
 	protected static final int INVADER_BULLET_VELOCITY = 4;
-
 	protected static final int PLAYER_VELOCITY = 3;
-
 	protected static final int PLAYER_BULLET_VELOCITY = 4;
 
-	public static final Vec2d PLAYER_SIZE = new Vec2d(32,32);
+	protected static final double INVADER_FIRING_PROBABILITY = 0.995; // 0.995;
 
-	public static final Vec2d BULLET_SIZE = new Vec2d(6,14);
+	protected static final int PLAYER_LIFES = 3;
 
-	public static final Vec2d INVADER_SIZE = new Vec2d(32,32);
-
+	// number of ticks that needs to be elapsed between subsequent shots by the player
 	protected static final int TICKS_PER_SHOT_LIMIT = 10;
 
 	protected static final int MAX_PLAYER_BULLETS_IN_FLIGHT = 1;
 
+	// FPS target
 	protected static final int TICKS_PER_SECOND = 60;
 
+	// time (in ticks) after which we're going to automatically bump the difficulty
+	// if the player fails to destroy all invaders on the current level
 	protected static final int DIFFICULITY_INCREASE_AFTER_TICKS = 30 * TICKS_PER_SECOND;
 
-	protected static final List<Entity> entities = new ArrayList<>();
+	protected static int ticksTillDifficultyIncrease=DIFFICULITY_INCREASE_AFTER_TICKS;
 
+	// list holding all non-static (moving) game entities
+	protected static final List<Entity> nonStaticEntities = new ArrayList<>();
+
+	protected static final List<Barricade> barricades = new ArrayList<>();
+
+	// set holding the key codes of all keys that are currently pressed
 	protected static final Set<Integer> PRESSED_KEYS = new HashSet<>();
 
 	protected static Player player;
 
-	protected static int remainingInvaders;
-	protected static int currentTick;
-	protected static int ticksTillDifficultyIncrease=DIFFICULITY_INCREASE_AFTER_TICKS;
+	// number of invaders that are still alive
+	protected static int invadersRemaining;
 
+	// the current tick
+	protected static int currentTick;
+
+	// the current difficulty level
 	protected static int difficulty = 1;
 
-	protected static int playerBulletsInFlight;
-
+	// flag indicating whether the game is over
 	protected static boolean gameOver;
 
-	protected static void playSound(SoundEffect effect)
-	{
-		effect.play();
-	}
-
-	protected static enum Volume
+	/**
+	 * Sound volume levels we're using.
+	 *
+	 * @author tobias.gierke@code-sourcery.de
+	 */
+	public static enum Volume
 	{
 		LOUD(0.9f),
 		NOT_SO_LOUD(0.7f),
@@ -115,18 +133,20 @@ public class Main
 	public static enum SoundEffect
 	{
 		PLAYER_SHOOTING("/player_laser.wav",Volume.LOUD , 3),
+		ONE_LIFE_LOST("/one_life_lost.wav",Volume.LOUD , 3),
 		INVADER_SHOOTING("/invader_laser.wav",Volume.QUIET , 3),
 		GAME_OVER("/gameover.wav",Volume.NOT_SO_LOUD, 1),
 		INVADER_DESTROYED("/invader_destroyed.wav",Volume.LOUD, 3);
 
-		private final List<Clip> clips=new ArrayList<>();
+		private final Clip[] clips;
 
-		private final int concurrency;
+		private final int concurrency; // maximum number of instances of this sound that may be playing at the same time
 		private int currentClipIdx;
 
 		private SoundEffect(String soundFileName,Volume volume,int concurrency)
 		{
 			this.concurrency = concurrency;
+			this.clips = new Clip[ concurrency ];
 			try
 			{
 				final URL url = Main.class.getResource(soundFileName);
@@ -135,7 +155,7 @@ public class Main
 				}
 				for ( int i = 0 ; i < concurrency ; i++ )
 				{
-					clips.add(createClip( AudioSystem.getAudioInputStream(url) , volume ));
+					clips[i] = createClip( AudioSystem.getAudioInputStream(url) , volume );
 				}
 			}
 			catch (final Exception e) {
@@ -143,27 +163,23 @@ public class Main
 			}
 		}
 
-		private Clip createClip(AudioInputStream stream,Volume volume)
+		private Clip createClip(AudioInputStream stream,Volume volume) throws LineUnavailableException, IOException
 		{
-			try {
-				final Clip clip = AudioSystem.getClip();
-				clip.open( stream );
+			final Clip clip = AudioSystem.getClip();
+			clip.open( stream );
 
-				final FloatControl masterGain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+			final FloatControl masterGain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
 
-				final float range = masterGain.getMaximum() - masterGain.getMinimum();
-				final float value = masterGain.getMinimum() + range*volume.gainPercentage;
-				masterGain.setValue( value );
-				return clip;
-			} catch (final Exception e) {
-				throw new RuntimeException("Failed to obtain audio line",e);
-			}
+			final float range = masterGain.getMaximum() - masterGain.getMinimum();
+			final float value = masterGain.getMinimum() + range*volume.gainPercentage;
+			masterGain.setValue( value );
+			return clip;
 		}
 
 		public void play()
 		{
 			currentClipIdx = (currentClipIdx+1) % concurrency;
-			final Clip clip = clips.get(currentClipIdx);
+			final Clip clip = clips[ currentClipIdx ];
 			if ( ! clip.isActive() ) {
 				clip.setFramePosition(0);
 				clip.start();
@@ -171,7 +187,7 @@ public class Main
 		}
 	}
 
-	protected static class Vec2d
+	public static class Vec2d
 	{
 		protected static final Vec2d ZERO = new Vec2d(0,0);
 
@@ -193,11 +209,36 @@ public class Main
 		public String toString() { return "( "+x+" , "+y+" )"; }
 	}
 
-	protected static abstract class Entity
+	public static enum EntityState
 	{
-		public Vec2d position;
-		public Vec2d velocity;
-		public Vec2d size;
+		ALIVE{
+			@Override
+			public boolean canTransitionTo(EntityState other) {
+				return other == DYING;
+			}
+		},
+		DYING{
+			@Override
+			public boolean canTransitionTo(EntityState other) {
+				return other == DEAD;
+			}
+		},
+		DEAD;
+
+		public boolean canTransitionTo(EntityState other) { return false; }
+	}
+
+	public static abstract class Entity
+	{
+		public final Vec2d position;
+		public final Vec2d velocity;
+		public final Vec2d size;
+
+		private EntityState state=EntityState.ALIVE;
+
+		public boolean isFlashing;
+		public boolean flashingState;
+		public int flashingTicksRemaining;
 
 		public Entity(Vec2d position,Vec2d velocity,Vec2d size)
 		{
@@ -206,6 +247,64 @@ public class Main
 			this.size = new Vec2d(size);
 		}
 
+		public void setState(EntityState newState)
+		{
+			if ( ! this.state.canTransitionTo( newState ) ) {
+				throw new IllegalStateException("Invalid state transition for entity "+this+": "+this.state+" -> "+newState);
+			}
+			this.state = newState;
+		}
+
+		public void onDispose() {
+		}
+
+		public void entityHit() {
+		}
+
+		public void flash()
+		{
+			this.isFlashing = true;
+			this.flashingTicksRemaining=30;
+			this.flashingState = true;
+		}
+
+		protected void renderMaybeFlashing(Sprite sprite,Graphics2D graphics)
+		{
+			renderMaybeFlashing( sprite.image , graphics );
+		}
+
+		protected void renderMaybeFlashing(BufferedImage image,Graphics2D graphics)
+		{
+			if ( isFlashing )
+			{
+				flashingTicksRemaining--;
+				if ( flashingTicksRemaining == 0 ) {
+					isFlashing=false;
+				}
+
+				if ( ( flashingTicksRemaining % 5 ) == 0 )
+				{
+					flashingState = ! flashingState;
+				}
+
+				if ( flashingState )
+				{
+					graphics.setColor(BACKGROUND_COLOR);
+					graphics.fillRect( position.x , position.y , size.width() , size.height() );
+				} else {
+					graphics.drawImage( image , position.x , position.y , null );
+				}
+			} else {
+				graphics.drawImage( image , position.x , position.y , null );
+			}
+		}
+
+		public boolean isAlive() { return state == EntityState.ALIVE; }
+
+		public boolean isDying() { return state == EntityState.DYING; }
+
+		public boolean isDead() { return state == EntityState.DEAD; }
+
 		@Override
 		public String toString() { return getClass().getSimpleName()+" @ "+position; }
 
@@ -213,7 +312,9 @@ public class Main
 		public boolean isPlayer() { return this instanceof Player; }
 		public boolean isBullet() { return this instanceof Bullet; }
 
-		public boolean isOutOfScreen(int width,int height) { return bottom() < 0 || top() > height|| right() < 0 || left() > width; }
+		public boolean isOutOfScreen(Rectangle r) {
+			return bottom() < r.y || top() > r.y+r.height|| right() < r.x || left() > r.x+r.width;
+		}
 
 		public void stop() { velocity.set(0,0); }
 		public int left() { return position.x; }
@@ -236,8 +337,11 @@ public class Main
 
 		public boolean collidesWith(Collection<Entity> others) { return others.stream().anyMatch( this::collides ); }
 
+		public boolean canCollide() { return isAlive(); }
+
 		public boolean collides(Entity other) { return this != other &&
-				!( isBullet() && other.isBullet() ) &&
+				other.canCollide() &
+				this.canCollide() &&
 				!(isAbove(other) || isBelow(other) || isLeftOf(other) || isRightOf(other ) ); }
 
 		public void moveLeft(int vx) { this.velocity.x = -vx; };
@@ -245,25 +349,34 @@ public class Main
 
 		public void tick() { position.add( velocity ); }
 
-		public void draw(Graphics2D graphics) {
-			graphics.fillRect( position.x - size.width() /2 , position.y - size.height() / 2 , size.width() , size.height() );
-		}
+		public abstract void render(Graphics2D graphics);
 	}
 
-	protected static final class Player extends Entity
+	public static final class Player extends Entity
 	{
 		public int tickAtLastShot=-1;
 		public int score;
+		public int playerBulletsInFlight;
+		public int lifes = PLAYER_LIFES;
 
-		public Player(Vec2d position) { super(position,Vec2d.ZERO,PLAYER_SIZE); }
+		public Player(Vec2d position) { super(position,Vec2d.ZERO,Sprite.PLAYER.size); }
 
 		@Override
 		public void tick()
 		{
 			super.tick();
-			if ( isOutOfScreen( VIEWPORT_SIZE.width , VIEWPORT_SIZE.height ) ) {
+			if ( isOutOfScreen( VIEWPORT ) ) {
 				velocity.x = -velocity.x;
 				position.add( velocity );
+			}
+		}
+
+		@Override
+		public void entityHit()
+		{
+			lifes--;
+			if ( lifes > 0 ) {
+				flash();
 			}
 		}
 
@@ -272,8 +385,8 @@ public class Main
 		public int ticksSinceLastShot(int currentTick) { return tickAtLastShot > 0 ? currentTick - tickAtLastShot : Integer.MAX_VALUE; }
 
 		@Override
-		public void draw(Graphics2D graphics) {
-			Sprite.PLAYER_SPRITE.render( graphics , position );
+		public void render(Graphics2D graphics) {
+			renderMaybeFlashing(Sprite.PLAYER, graphics);
 		}
 
 		public void shoot()
@@ -281,90 +394,227 @@ public class Main
 			if ( ticksSinceLastShot( currentTick ) > TICKS_PER_SHOT_LIMIT && playerBulletsInFlight < MAX_PLAYER_BULLETS_IN_FLIGHT )
 			{
 				final int bulletX = left() + size.width()/2;
-//				final int bulletY = top() - BULLET_SIZE.height();
-				final int bulletY = top() - BULLET_SIZE.height();
+				final int bulletY = top() - Sprite.PLAYER_BULLET.size.height();
 				final Vec2d pos = new Vec2d( bulletX, bulletY );
-				entities.add( new Bullet( pos , new Vec2d( 0 , -PLAYER_BULLET_VELOCITY ) , true ) );
+				nonStaticEntities.add( new Bullet( pos , new Vec2d( 0 , -PLAYER_BULLET_VELOCITY ) , true ) );
 				tickAtLastShot = currentTick;
 				playerBulletsInFlight++;
-				playSound( SoundEffect.PLAYER_SHOOTING );
+				SoundEffect.PLAYER_SHOOTING.play();
 			}
 		}
 	}
 
-	protected static final class Bullet extends Entity
+	public static final class Barricade extends Entity {
+
+		private final BufferedImage sprite;
+
+		public Barricade(Vec2d position,Sprite sprite) {
+			super(position, Vec2d.ZERO, Sprite.BARRICADE.size );
+			this.sprite = new BufferedImage( sprite.image.getWidth() , sprite.image.getHeight() , sprite.image.getType());
+			final Graphics2D graphics = this.sprite.createGraphics();
+			graphics.drawImage( sprite.image , 0 , 0 , null );
+			graphics.dispose();
+		}
+
+		public boolean hitBy(Bullet entity)
+		{
+			if ( ! collides( entity) ) {
+				return false;
+			}
+
+			// find intersecting rectangle
+			final Rectangle r1 = new Rectangle(position.x,position.y,size.width(),size.height());
+			final Rectangle r2 = new Rectangle(entity.position.x,entity.position.y,entity.size.width(),entity.size.height());
+
+			final Rectangle intersection = r1.intersection(r2); // note: intersection can never be empty unless the collides(Entity) method is broken
+			if ( intersection.isEmpty() ) {
+				return false;
+			}
+
+			final int yIncrement;
+			final int yStart; // in local coordinates !
+			final int yEnd; // in local coordinates !
+			final Function<Integer,Boolean> condition;
+			if ( entity.isMovingDown() )
+			{
+				// check starts at top
+				yIncrement=1;
+				yStart = intersection.y - position.y;
+				yEnd = intersection.y + intersection.height - position.y;
+				condition = y -> y < sprite.getHeight();
+			}
+			else if ( entity.isMovingUp() )
+			{
+				// check starts at bottom
+				yIncrement=-1;
+				yStart = intersection.y + intersection.height - position.y - 1;
+				yEnd = intersection.y - position.y;
+				condition = y -> y >= 0;
+			} else {
+				throw new RuntimeException("Internal error, bullet is moving neither up nor down ??");
+			}
+
+			// clear pixels that were hit
+			boolean pixelsHit=false;
+
+			final int xStart = intersection.x - position.x;
+			final int xEnd = intersection.x + intersection.width - position.x;
+
+			if ( yStart < 0 || yStart > sprite.getHeight() ) {
+				throw new RuntimeException("Invalid yStart: "+yStart+" (max. "+sprite.getHeight()+")");
+			}
+			if ( yEnd < 0 || yEnd > sprite.getHeight() ) {
+				throw new RuntimeException("Invalid yEnd: "+yEnd+" (max. "+sprite.getHeight()+")");
+			}
+
+			if ( xStart < 0 || xStart > sprite.getWidth() ) {
+				throw new RuntimeException("Invalid xStart: "+xStart+" (max. "+sprite.getWidth()+")");
+			}
+			if ( xEnd < 0 || xEnd > sprite.getWidth() ) {
+				throw new RuntimeException("Invalid xEnd: "+xEnd+" (max. "+sprite.getWidth()+")");
+			}
+
+			for ( int y = yStart ; condition.apply(y) && ! pixelsHit ; y += yIncrement )
+			{
+				for ( int x = xStart ; x < xEnd ; x++ )
+				{
+					final int rgb = sprite.getRGB( x ,y ) & 0x00ffffff; // ignore alpha channel
+					if ( rgb != 0 ) {
+						pixelsHit=true; // stop deleting pixels after finishing this row, we'll only remove the top-most/bottom-most row of pixels on each hit
+						sprite.setRGB( x , y , 0 );
+					}
+				}
+			}
+			return pixelsHit;
+		}
+
+		@Override
+		public void render(Graphics2D graphics) {
+			renderMaybeFlashing( sprite , graphics);
+		}
+	}
+
+	public static final class Bullet extends Entity
 	{
 		public final boolean shotByPlayer;
 
 		public Bullet(Vec2d position,Vec2d velocity,boolean shotByPlayer) {
-			super(position,velocity, BULLET_SIZE );
+			super(position,velocity, shotByPlayer ? Sprite.PLAYER_BULLET.size : Sprite.INVADER_BULLET.size );
 			this.shotByPlayer = shotByPlayer;
 		}
 
 		@Override
-		public void draw(Graphics2D graphics)
+		public void onDispose()
+		{
+			super.onDispose();
+			if ( shotByPlayer ) {
+				player.playerBulletsInFlight--;
+			}
+		}
+
+		@Override
+		public boolean collides(Entity other)
+		{
+			if ( other.isBullet() ) { // bullets can not collide with other bullets
+				return false;
+			}
+			// prevent invaders from being killed by their collegues
+			// slightly hackish but Invaders#noInvaderBelow() check does
+			// prevent invaders below and slightly to the left/right of the firing one
+			// to be hit when they move left/right on the next tick
+			if ( other.isInvader() && ! shotByPlayer ) {
+				return false;
+			}
+			return super.collides(other);
+		}
+
+		@Override
+		public String toString() {
+			return "Bullet( player: "+shotByPlayer+" , pos: "+position+")";
+		}
+
+		@Override
+		public void render(Graphics2D graphics)
 		{
 			if ( isMovingDown() ) {
-				Sprite.INVADER_BULLET_SPRITE.render( graphics , position );
+				Sprite.INVADER_BULLET.render( graphics , position );
 			} else {
-				Sprite.PLAYER_BULLET_SPRITE.render( graphics , position );
+				Sprite.PLAYER_BULLET.render( graphics , position );
 			}
 		}
 	}
 
-	protected static final class Invader extends Entity
+	public static final class Invader extends Entity
 	{
 		protected static final Random random = new Random(System.currentTimeMillis());
 
-		public Invader(Vec2d position,Vec2d velocity) { super(position,velocity,INVADER_SIZE); }
+		public Invader(Vec2d position,Vec2d velocity) { super(position,velocity,Sprite.INVADER.size); }
+
+		@Override
+		public void entityHit()
+		{
+			setState( EntityState.DYING );
+			flash();
+		}
+
+		@Override
+		public boolean collides(Entity other)
+		{
+			// prevent invaders from being killed by their collegues
+			// slightly hackish but Invaders#noInvaderBelow() check does
+			// prevent invaders below and slightly to the left/right of the firing one
+			// to be hit when they move left/right on the next tick
+			if ( other.isBullet() && !( (Bullet) other).shotByPlayer )  {
+				return false;
+			}
+			return super.collides(other);
+		}
 
 		@Override
 		public void tick()
 		{
 			super.tick();
-			if ( noOtherInvaderBelow() && random.nextFloat() > 0.995 )
+			if ( noOtherInvaderBelow() && random.nextFloat() > INVADER_FIRING_PROBABILITY )
 			{
-				entities.add( new Bullet( new Vec2d( position.x , position.y + 5 + size.height() ) , new Vec2d( 0 , INVADER_BULLET_VELOCITY ) , false ) );
+				nonStaticEntities.add( new Bullet( new Vec2d( position.x , position.y + 5 + size.height() ) , new Vec2d( 0 , INVADER_BULLET_VELOCITY ) , false ) );
 				SoundEffect.INVADER_SHOOTING.play();
 			}
 		}
 
 		@Override
-		public void draw(Graphics2D graphics) {
-			Sprite.INVADER_SPRITE.render( graphics , position );
+		public void render(Graphics2D graphics)
+		{
+			renderMaybeFlashing(Sprite.INVADER, graphics);
 		}
 
 		private boolean noOtherInvaderBelow()
 		{
-			return entities.stream().noneMatch( entity ->
+			return nonStaticEntities.stream().noneMatch( entity ->
 			entity != this &&
 			entity.isInvader() &&
 			entity.isBelow( this ) &&
-			( ( entity.left() >= left() && entity.left() <= right() ) ||
-					( entity.right() >= left() && entity.right() <= right() )
-					) );
+			( ( entity.left() >= left()-10 && entity.left() <= right()+10 ) || ( entity.right() >= left()-10 && entity.right() <= right()+10 ) ) );
 		}
 	}
 
-	protected static enum Sprite
+	public static enum Sprite
 	{
-		PLAYER_SPRITE("/player_sprite.png"),
-		INVADER_SPRITE("/invader_sprite.png"),
-		PLAYER_BULLET_SPRITE("/player_bullet_sprite.png"),
-		INVADER_BULLET_SPRITE("/invader_bullet_sprite.png");
+		PLAYER("/player_sprite.png"),
+		LIFE_ICON("/player_sprite.png"),
+		INVADER("/invader_sprite.png"),
+		PLAYER_BULLET("/player_bullet_sprite.png"),
+		BARRICADE("/barricade_sprite.png"),
+		INVADER_BULLET("/invader_bullet_sprite.png");
 
-		private final String resource;
-		private BufferedImage image;
+		public final BufferedImage image;
+		public final Vec2d size;
 
 		private Sprite(String resource)
 		{
-			this.resource = resource;
-		}
-
-		private void loadImage() {
 			final InputStream in = Main.class.getResourceAsStream(resource);
 			try {
 				image = ImageIO.read( in );
+				size = new Vec2d( image.getWidth() , image.getHeight() );
 			} catch (final IOException e) {
 				throw new RuntimeException("Failed to load sprite '"+resource+"'");
 			}
@@ -377,34 +627,39 @@ public class Main
 
 		public void render(Graphics2D graphics,int x,int y)
 		{
-			if ( image == null ) {
-				loadImage();
-			}
 			graphics.drawImage( image , x , y , null );
 		}
 	}
 
-	protected static final class Game extends JPanel
+	public static final class Game extends JPanel
 	{
+		// background buffer that we're going to render to
 		private final Object BACKGROUND_BUFFER_LOCK = new Object();
 		private BufferedImage backgroundBuffer;
 		private Graphics2D backgroundGraphics;
 
+		// flag used to synchronize rendering thread (Swing EDT) with game loop execution
+		// game loop will only advance after the current frame has been rendered
 		public final AtomicBoolean screenRendered = new AtomicBoolean(false);
 
+		// fonts
 		private final Font defaultFont;
 		private final Font bigDefaultFont;
 		private final Font gameOverFont;
 
-		private final long appStartTime=System.currentTimeMillis();
-		private long framesRendered;
+		// FPS calculation stuff
+		private long appStartTime=System.currentTimeMillis(); // time that application got started
+		private long framesRendered; // number of rendered frames since application start
 
 		public Game()
 		{
 			setPreferredSize(SCREEN_SIZE);
 			setSize(SCREEN_SIZE );
+
+			// we're rendering to a background buffer anyway , disable double buffering
 			setDoubleBuffered(false);
 
+			// setup fonts
 			final InputStream is = Main.class.getResourceAsStream("/PressStart2P.ttf");
 			if ( is == null ) {
 				throw new RuntimeException("Failed to load font '/PressStart2P.ttf'");
@@ -418,7 +673,7 @@ public class Main
 				throw new RuntimeException("Failed to load font",e);
 			}
 
-			init();
+			reset();
 
 			addKeyListener( new KeyAdapter()
 			{
@@ -427,55 +682,73 @@ public class Main
 				{
 					if ( gameOver && e.getKeyChar() == KeyEvent.VK_ENTER )
 					{
-						init();
+						reset();
 					} else {
 						PRESSED_KEYS.add( e.getKeyCode() );
 					}
 				}
 
 				@Override
-				public void keyReleased(KeyEvent e) {
-					PRESSED_KEYS.remove( e.getKeyCode() );
-				}
+				public void keyReleased(KeyEvent e) { PRESSED_KEYS.remove( e.getKeyCode() ); }
 			} );
 		}
 
-		private void init()
+		private void reset()
 		{
+			appStartTime=System.currentTimeMillis(); // time that application got started
+			framesRendered = 0; // number of rendered frames since application start
+
 			currentTick = 0;
 
 			CURRENT_INVADER_VELOCITY.set(INITIAL_INVADER_VELOCITY);
 
 			ticksTillDifficultyIncrease=DIFFICULITY_INCREASE_AFTER_TICKS;
 			difficulty = 1;
-			playerBulletsInFlight=0;
 			gameOver = false;
 
-			final int playerX = VIEWPORT_SIZE.width /2;
-			final int playerY = VIEWPORT_SIZE.height - PLAYER_SIZE.height();
+			final int playerX = VIEWPORT.x + VIEWPORT.width /2;
+			final int playerY = VIEWPORT.y + VIEWPORT.height - Sprite.PLAYER.size.height();
 			player = new Player( new Vec2d( playerX , playerY )  );
 
-			entities.clear();
-			entities.add( player );
+			nonStaticEntities.clear();
+			barricades.clear();
+
+			nonStaticEntities.add( player );
 			spawnInvaders();
+			spawnBarricades();
+		}
+
+		private void spawnBarricades()
+		{
+			final int widthPerBarricade = VIEWPORT.width/ BARRICADE_COUNT;
+
+			int xOffset = VIEWPORT.x + widthPerBarricade/2 - Sprite.BARRICADE.size.width()/2;
+
+			final int yOffset = VIEWPORT.y + VIEWPORT.height - Sprite.PLAYER.size.height() - Sprite.BARRICADE.size.height() - Sprite.PLAYER_BULLET.size.height();
+
+			for ( int x = 0 ; x < BARRICADE_COUNT ; x++ )
+			{
+				barricades.add( new Barricade(new Vec2d(xOffset,yOffset), Sprite.BARRICADE ) );
+				xOffset += widthPerBarricade;
+			}
 		}
 
 		private void spawnInvaders()
 		{
-			final int requiredWidth = INVADERS_PER_ROW * INVADER_SIZE.width() + (INVADERS_PER_ROW-1) * INVADER_SIZE.width();
-			final int remainingWidth = VIEWPORT_SIZE.width - requiredWidth;
-			final int xStartingOffset = Math.max( 0 ,  remainingWidth/2 );
-			final int yStartingOffset = INVADER_SIZE.height();
+			final int requiredWidth = INVADERS_PER_ROW * Sprite.INVADER.size.width() + (INVADERS_PER_ROW-1) * Sprite.INVADER.size.width();
+			final int remainingWidth = VIEWPORT.width - requiredWidth;
+			final int xStartingOffset = VIEWPORT.x + Math.max( 0 ,  remainingWidth/2 );
+			final int yStartingOffset = VIEWPORT.y + Sprite.INVADER.size.height();
 			for ( int x = 0 ; x < INVADERS_PER_ROW ; x++ )
 			{
 				for ( int y = 0 ; y < ROWS_OF_INVADERS ; y++ )
 				{
-					final int xStart = xStartingOffset + x * INVADER_SIZE.width() + x*INVADER_SIZE.width()/2;
-					final int yStart = yStartingOffset + y * INVADER_SIZE.height() + (int) (y*INVADER_SIZE.height()*0.3f);
-					entities.add( new Invader(new Vec2d(xStart,yStart) , new Vec2d( CURRENT_INVADER_VELOCITY.x , 0 ) ) );
+					final int xStart = xStartingOffset + x * Sprite.INVADER.size.width() + x*Sprite.INVADER.size.width()/2;
+					final int yStart = yStartingOffset + y * Sprite.INVADER.size.height() + (int) (y*Sprite.INVADER.size.height()*0.3f);
+					nonStaticEntities.add( new Invader(new Vec2d(xStart,yStart) , new Vec2d( CURRENT_INVADER_VELOCITY.x , 0 ) ) );
 				}
 			}
-			remainingInvaders = INVADERS_PER_ROW * ROWS_OF_INVADERS;
+			invadersRemaining = INVADERS_PER_ROW * ROWS_OF_INVADERS;
 		}
 
 		public void processInput()
@@ -506,10 +779,13 @@ public class Main
 			// handle keyboard input
 			processInput();
 
+			// remove dead entities
+			nonStaticEntities.removeIf( e -> e.isDead() || ( e.isDying() && ! e.isFlashing ) );
+
 			// find left-most and right-most invader
 			Invader rightMost = null;
 			Invader leftMost = null;
-			for ( final Entity e : entities ) {
+			for ( final Entity e : nonStaticEntities ) {
 				if ( e.isInvader() ) {
 					if ( rightMost == null || e.position.x > rightMost.position.x ) {
 						rightMost = (Invader) e;
@@ -522,11 +798,11 @@ public class Main
 
 			// flip invader movement direction if either the left-most or right-most
 			// hit the screen border
-			if ( ( leftMost != null && leftMost.left() < 0 ) || ( rightMost != null && rightMost.right() > VIEWPORT_SIZE.width ) )
+			if ( ( leftMost != null && leftMost.left() < 0 ) || ( rightMost != null && rightMost.right() > VIEWPORT.getMaxX() ) )
 			{
-				entities.stream().filter( Entity::isInvader ).forEach( invader ->
+				nonStaticEntities.stream().filter( Entity::isInvader ).forEach( invader ->
 				{
-					if ( invader.bottom() < VIEWPORT_SIZE.width*0.8 ) {
+					if ( invader.bottom() < VIEWPORT.y+VIEWPORT.height*0.8 ) {
 						invader.position.y += 2;
 					}
 					invader.velocity.x = -invader.velocity.x;
@@ -536,51 +812,88 @@ public class Main
 			// tick all entities, need to iterate over a copy here since
 			// Entity#tick() might add/remove entities from the collection
 			// while we're iterating (and this would cause a ConcurrentModificationException)
-			new ArrayList<>( entities ).forEach( Entity::tick );
+			new ArrayList<>( nonStaticEntities ).forEach( Entity::tick );
 
-			// remove colliding entities (can only be bullet<->player or bullet<->invader since bullets cannot collide with each other)
-			final List<Entity> colliding = entities.stream().filter( a -> a.collidesWith(entities) ).collect(Collectors.toList());
-			final List<Entity> offScreen = entities.stream().filter( entity -> entity.isOutOfScreen( VIEWPORT_SIZE.width , VIEWPORT_SIZE.height )  ).collect(Collectors.toList());
+			// find colliding entities (can only be bullet<->player or bullet<->invader since bullets cannot collide with each other)
+			final List<Entity> colliding = nonStaticEntities.stream().filter( a -> a.collidesWith(nonStaticEntities) ).collect(Collectors.toList());
+
+			// find entities that are off-screen
+			final List<Entity> offScreen = nonStaticEntities.stream().filter( entity -> entity.isOutOfScreen( VIEWPORT )  ).collect(Collectors.toList());
 
 			final List<Entity> toRemove = offScreen;
 			if ( colliding.contains( player ) )
 			{
-				gameOver = true;
-				playSound(SoundEffect.GAME_OVER);
+				player.entityHit();
+
+				if ( player.lifes == 0 )
+				{
+					gameOver = true;
+					SoundEffect.GAME_OVER.play();
+				} else {
+					SoundEffect.ONE_LIFE_LOST.play();
+					colliding.remove(player);
+					toRemove.addAll( colliding );
+				}
 			} else {
 				toRemove.addAll( colliding );
 			}
 
 			if ( ! gameOver )
 			{
-				playerBulletsInFlight -= toRemove.stream().filter( e -> e.isBullet() && ((Bullet) e).shotByPlayer ).count();
+				final List<Entity> destroyedInvaders = toRemove.stream().filter( Entity::isInvader ).collect(Collectors.toList() );
+				destroyedInvaders.forEach( Entity::entityHit );
 
-				final long invadersDestroyed = toRemove.stream().filter( Entity::isInvader ).count();
+				toRemove.removeIf( e -> e.isInvader() & ! e.isDead() );
+
+				final long invadersDestroyed = destroyedInvaders.size();
 
 				// increase player score
 				final float percentage = Math.max(0.1f, ticksTillDifficultyIncrease / (float) DIFFICULITY_INCREASE_AFTER_TICKS);
 				player.increaseScore( (int) (invadersDestroyed * 100 * difficulty *percentage) );
 
 				for ( int i = 0 ; i < invadersDestroyed ; i++ ) {
-					playSound( SoundEffect.INVADER_DESTROYED );
+					SoundEffect.INVADER_DESTROYED.play();
 				}
 
-				remainingInvaders -= invadersDestroyed;
+				invadersRemaining -= invadersDestroyed;
 
 				ticksTillDifficultyIncrease--;
-				if ( remainingInvaders <= 0 ||  ticksTillDifficultyIncrease <= 0  ) { // no more invaders left, increase difficulty and spawn new invaders
+				if ( invadersRemaining <= 0 ||  ticksTillDifficultyIncrease <= 0  ) { // no more invaders left, increase difficulty and spawn new invaders
 					increaseDifficulty();
-					if ( remainingInvaders <= 0 ) {
+					if ( invadersRemaining <= 0 ) {
 						spawnInvaders();
 					}
 				}
 			}
 
-			// remove all entities that are either destroyed or off-screen
-			entities.removeAll( toRemove );
+			// discard all bullets that collided with either the player or an invader
+			removeEntities( toRemove );
+
+			// check the remaining bullets for collisions with barricades
+			final List<Entity> bullets =  nonStaticEntities.stream().filter( Entity::isBullet ).collect(Collectors.toList());
+			final List<Entity> bulletsToRemove = new ArrayList<>();
+
+outer:
+			for ( final Entity bullet: bullets )
+			{
+				for ( final Barricade barricade : barricades )
+				{
+					if ( barricade.hitBy( (Bullet) bullet ) ) {
+						bulletsToRemove.add( bullet );
+						continue outer;
+					}
+				}
+			}
+
+			removeEntities( bulletsToRemove );
 
 			// render to background buffer
 			render();
+		}
+
+		private void removeEntities(Collection<Entity> toRemove) {
+			toRemove.forEach( Entity::onDispose );
+			nonStaticEntities.removeAll( toRemove );
 		}
 
 		protected void increaseDifficulty()
@@ -633,49 +946,71 @@ public class Main
 				g.clearRect(0, 0, SCREEN_SIZE.width, SCREEN_SIZE.height);
 
 				// render all game entities
-				entities.forEach( e -> e.draw(backgroundGraphics) );
+				nonStaticEntities.forEach( e -> e.render(backgroundGraphics) );
+				barricades.forEach( e -> e.render(backgroundGraphics ) );
 
 				g.setColor(Color.WHITE);
 
-				// render line separating playing field from score board
-				g.fillRect(0,VIEWPORT_SIZE.height + 3 , VIEWPORT_SIZE.width , 3 );
-
 				final int FONT_HEIGHT = 20;
-				final int X_OFFSET = 10;
+				final int X_OFFSET = VIEWPORT.x + 10;
 
-				int y = VIEWPORT_SIZE.height+FONT_HEIGHT+10;
+				int y = FONT_HEIGHT+10;
 
 				// render difficulty level
 				g.setFont( bigDefaultFont );
 				g.drawString("Level: "+difficulty, X_OFFSET ,y);
 
 				// render player score
-				final String score = "Score: "+formatScore( player.score );
-				FontMetrics fontMetrics = g.getFontMetrics();
-				Rectangle2D metrics = fontMetrics.getStringBounds(score, g );
-				g.drawString( score , (int) (VIEWPORT_SIZE.width - metrics.getWidth() ) ,y);
+				{
+					final String score = "Score: "+formatScore( player.score );
+					final Rectangle2D metrics = g.getFontMetrics().getStringBounds(score, g );
+					g.drawString( score , (int) (VIEWPORT.getMaxX() - metrics.getWidth() ) ,y);
+					g.setFont( defaultFont );
+				}
 
-				g.setFont( defaultFont );
-				y= y + (int) (bigDefaultFont.getSize()*1.4f);
+				y= y + (int) (bigDefaultFont.getSize()*2.5f);
 
-				// render number of remaining invaders
-				g.drawString("Invaders remaining: "+remainingInvaders, X_OFFSET,y);
-				y+= FONT_HEIGHT;
+				// render lifes left
+				{
+					final String text= "Lifes:";
+					final Rectangle2D metrics =  g.getFontMetrics().getStringBounds(text, g);
+
+					final LineMetrics lineMetrics = g.getFontMetrics().getLineMetrics(text, g );
+
+					final int fontX = X_OFFSET;
+					final int fontY = (int) (y -lineMetrics.getAscent() );
+
+					g.drawString( text , fontX ,fontY);
+
+					int iconX =  (int) (fontX + metrics.getWidth() + 10 );
+					final int iconY = fontY - Sprite.LIFE_ICON.size.height()/2 - 5;
+					for ( int i = 0 ; i < player.lifes ; i++ )
+					{
+						Sprite.LIFE_ICON.render(g, iconX , iconY );
+						iconX += Sprite.LIFE_ICON.size.width() + 10;
+					}
+				}
 
 				// render time till next difficulty level
-				String text= "Time remaining: ";
-				metrics = fontMetrics.getStringBounds(text, g);
+				{
+					final String text= "Time remaining";
+					final Rectangle2D metrics =  g.getFontMetrics().getStringBounds(text, g);
 
-				g.drawString( text , X_OFFSET,y);
+					final LineMetrics lineMetrics = g.getFontMetrics().getLineMetrics(text, g );
 
-				final float remainingTimePercentage = ticksTillDifficultyIncrease / (float) DIFFICULITY_INCREASE_AFTER_TICKS;
-				final int barWidth = (int) (100 * remainingTimePercentage);
+					final int fontX = VIEWPORT.x+VIEWPORT.width - (int) metrics.getWidth() - 10;
+					final int fontY = (int) (y -lineMetrics.getAscent() );
 
-				g.setColor( remainingTimePercentage > 0.2f ? Color.GREEN : Color.RED );
+					final float remainingTimePercentage = ticksTillDifficultyIncrease / (float) DIFFICULITY_INCREASE_AFTER_TICKS;
+					final int barWidth = (int) ( metrics.getWidth() * remainingTimePercentage);
 
-				g.fillRect( (int) (X_OFFSET+metrics.getWidth()) , (int) (y - metrics.getHeight()) , barWidth , 10 );
+					g.setColor( remainingTimePercentage > 0.2f ? Color.GREEN : Color.RED );
 
-				g.setColor(Color.WHITE);
+					g.fillRect( fontX-2 , fontY-2 , barWidth+2 , 3 + (int) lineMetrics.getHeight() );
+
+					g.setColor(Color.WHITE);
+					g.drawString( text , fontX ,y);
+				}
 
 				y+= FONT_HEIGHT;
 
@@ -690,12 +1025,11 @@ public class Main
 					g.setColor(Color.RED);
 					g.setFont( gameOverFont );
 
-					text = "GAME OVER !!!";
-					fontMetrics = g.getFontMetrics();
-					metrics = fontMetrics.getStringBounds(text, g );
+					final String text = "GAME OVER !!!";
+					final Rectangle2D metrics = g.getFontMetrics().getStringBounds(text, g );
 
-					final int textX = (int) (VIEWPORT_SIZE.width/2 - metrics.getWidth()/2);
-					final int textY = (int) (VIEWPORT_SIZE.height/2 - metrics.getHeight()/2 + fontMetrics.getDescent() );
+					final int textX = (int) (SCREEN_SIZE.width/2 - metrics.getWidth()/2);
+					final int textY = (int) (SCREEN_SIZE.height/2 - metrics.getHeight()/2 + g.getFontMetrics().getDescent() );
 					g.drawString(text,textX,textY);
 					g.setFont( defaultFont );
 				}
