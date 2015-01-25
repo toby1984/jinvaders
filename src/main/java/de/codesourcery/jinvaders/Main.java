@@ -88,7 +88,7 @@ public class Main
 
 	// time (in ticks) after which we're going to automatically bump the difficulty
 	// if the player fails to destroy all invaders on the current level
-	protected static final int DIFFICULITY_INCREASE_AFTER_TICKS = 30 * TICKS_PER_SECOND;
+	protected static final int DIFFICULITY_INCREASE_AFTER_TICKS = 90 * TICKS_PER_SECOND;
 
 	protected static int ticksTillDifficultyIncrease=DIFFICULITY_INCREASE_AFTER_TICKS;
 
@@ -474,7 +474,8 @@ public class Main
 				throw new RuntimeException("Invalid xEnd: "+xEnd+" (max. "+sprite.getWidth()+")");
 			}
 
-			for ( int y = yStart ; condition.apply(y) && ! pixelsHit ; y += yIncrement )
+			int rowsRemoved = 0;
+			for ( int y = yStart ; condition.apply(y) & rowsRemoved < 3 ; y += yIncrement )
 			{
 				for ( int x = xStart ; x < xEnd ; x++ )
 				{
@@ -483,6 +484,9 @@ public class Main
 						pixelsHit=true; // stop deleting pixels after finishing this row, we'll only remove the top-most/bottom-most row of pixels on each hit
 						sprite.setRGB( x , y , 0 );
 					}
+				}
+				if ( pixelsHit ) {
+					rowsRemoved++;
 				}
 			}
 			return pixelsHit;
