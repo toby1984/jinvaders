@@ -1,16 +1,16 @@
 # jinvaders
 
-A crude Space Invaders clone programmed in Java.
+A crude Space Invaders clone programmed in Java. I got inspired by a [http://vimeo.com/105955605|great talk by Mary Rose Cook] ... Javascript is still an atrocious language though :D
 
 <img src="https://raw.githubusercontent.com/toby1984/jinvaders/master/screenshot.png" width="640" height="480" />
 
 Attribution
 ===========
 
-## Font
+### Font
 The nice-looking retro font was released under the SIL Open Font License V1.1 and is (c) 2011 by Cody "CodeMan38" Boisclair (cody@zone38.net).
 
-## Sound effects
+### Sound effects
 
 I downloaded the retro sound effects from www.freesounds.org , authors are
 
@@ -49,5 +49,5 @@ Here's a list of known issues I might (or might not) fix:
   leads to visual glitches were shots are flying through invaders...
 - When the player shoots while right below a barrier, the shots are invisible (the barrier gets properly destroyed though)
 - Difficulty is kind'a wonky and probably needs adjusting
-- Sprites look atrocious (I'd gladly accept contributions though ;)
+- Sprites look like done by a three-year-old (I'd gladly accept contributions though ;)
 
