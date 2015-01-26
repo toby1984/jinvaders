@@ -1,3 +1,18 @@
+/**
+ * Copyright 2015 Tobias Gierke <tobias.gierke@code-sourcery.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package de.codesourcery.jinvaders.util;
 
 import java.awt.event.KeyAdapter;
@@ -23,16 +38,17 @@ public final class KeyboardInput extends KeyAdapter
 		PRESSED_KEYS.remove( e.getKeyCode() );
 	}
 
-
 	@Override
 	public void keyTyped(KeyEvent e)
 	{
 		synchronized(buffer)
 		{
-			if ( buffer.length() < MAX_KEYBOARD_BUFFER_SIZE ) {
-				buffer.append( e.getKeyChar() );
+			if ( e.getKeyChar() != KeyEvent.CHAR_UNDEFINED )
+			{
+				if ( buffer.length() < MAX_KEYBOARD_BUFFER_SIZE ) {
+					buffer.append( e.getKeyChar() );
+				}
 			}
-			buffer.notifyAll();
 		}
 	}
 
@@ -48,22 +64,18 @@ public final class KeyboardInput extends KeyAdapter
 		synchronized(buffer)
 		{
 			buffer.setLength(0);
+			PRESSED_KEYS.clear();
 		}
 	}
 
-	public char readKey()
+	public int maybeReadKey()
 	{
 		synchronized(buffer)
 		{
-			while ( buffer.length() == 0 )
-			{
-				try {
-					buffer.wait();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+			if ( buffer.length() == 0 ) {
+				return -1;
 			}
-			final char result = buffer.charAt(0);
+			final int result = buffer.charAt(0);
 			buffer.deleteCharAt(0);
 			return result;
 		}

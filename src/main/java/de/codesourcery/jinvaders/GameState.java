@@ -1,120 +1,194 @@
+/**
+ * Copyright 2015 Tobias Gierke <tobias.gierke@code-sourcery.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package de.codesourcery.jinvaders;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.awt.Toolkit;
+import java.awt.event.KeyEvent;
+import java.util.Optional;
 
+import de.codesourcery.jinvaders.entity.ITickContext;
+import de.codesourcery.jinvaders.entity.Player;
+import de.codesourcery.jinvaders.util.KeyboardInput;
 
 public enum GameState
 {
-	PLAYING {
-
+	PLAYING
+	{
 		@Override
-		public void render(Game game)
+		public GameStateImpl newInstance()
 		{
-			game.render( g ->
+			return new GameStateImpl(PLAYING)
 			{
-				game.renderEntities(g);
-				game.renderHud(g);
-			});
+				@Override
+				public void render(Game game)
+				{
+					game.render( g ->
+					{
+						game.renderEntities(g);
+						game.renderHud(g);
+					});
+				}
+
+				@Override
+				public void tick(Game game,ITickContext ctx)
+				{
+					final KeyboardInput keyboardInput = game.getKeyboardInput();
+					final Player player = game.getPlayer();
+
+					if ( keyboardInput.isPressed(KeyEvent.VK_A) ) {
+						player.moveLeft( Constants.PLAYER_VELOCITY );
+					}
+					else if ( keyboardInput.isPressed( KeyEvent.VK_D ) ) {
+						player.moveRight( Constants.PLAYER_VELOCITY );
+					} else {
+						player.stop();
+					}
+					if ( keyboardInput.isPressed( KeyEvent.VK_SPACE ) )
+					{
+						player.shoot(ctx);
+					}
+
+					game.advanceGameState();
+				}
+			};
 		}
 
 		@Override
-		public void tick(Game game)
-		{
-			game.processInput();
-
-			game.advanceGameState();
-		}
-
-		@Override
-		protected GameState[] getValidTransitions() {
-			return new GameState[]{ GAME_OVER };
+		public GameState onEnter(GameState previousState, Game game) {
+			game.reset();
+			return this;
 		}
 	},
 	GAME_OVER
 	{
 		@Override
-		public void render(Game game)
+		public GameStateImpl newInstance()
 		{
-			game.render( g ->
+			return new GameStateImpl(GAME_OVER)
 			{
-				game.renderEntities(g);
-				game.renderHud(g);
-				game.renderGameOverText(g);
-			});
+				@Override
+				public void render(Game game)
+				{
+					game.render( g ->
+					{
+						game.renderEntities(g);
+						game.renderHud(g);
+						game.renderGameOverText(g);
+					});
+				}
+
+				@Override
+				public void tick(Game game,ITickContext ctx)
+				{
+					if ( game.getKeyboardInput().isPressed( KeyEvent.VK_ENTER) ) {
+						game.startGame();
+					}
+				}
+			};
 		}
 
 		@Override
-		public void tick(Game game)
+		public GameState onEnter(GameState previousState, Game game)
 		{
-			game.processInput();
-		}
+			final Optional<HighscoreEntry> lowestScore = game.getHighscores().stream().reduce( (a,b) -> a.score < b.score ? a : b);
 
-		@Override
-		protected GameState[] getValidTransitions() {
-			return new GameState[]{ PLAYING,ENTER_HIGHSCORE,SHOW_HIGHSCORES };
+			if ( ! lowestScore.isPresent() || game.getPlayer().score > lowestScore.get().score )
+			{
+				return ENTER_HIGHSCORE;
+			}
+			return this;
 		}
 	},
-	ENTER_HIGHSCORE {
-
+	ENTER_HIGHSCORE
+	{
 		@Override
-		public void tick(Game game)
+		public GameStateImpl newInstance()
 		{
-		}
+			return new GameStateImpl(ENTER_HIGHSCORE)
+			{
+				private final StringBuilder buffer = new StringBuilder();
 
-		@Override
-		public void render(Game game) {
-		}
+				@Override
+				public void render(Game game)
+				{
+					game.render( g ->
+					{
+						game.renderEntities(g);
+						game.renderHud(g);
+						game.renderEnterHighscore(g,buffer.toString(),game.getPlayer().score);
+					});
+				}
 
-		@Override
-		protected GameState[] getValidTransitions() {
-			return new GameState[]{ PLAYING , SHOW_HIGHSCORES };
+				@Override
+				public void tick(Game game,ITickContext ctx)
+				{
+					final int c = game.getKeyboardInput().maybeReadKey();
+					if ( c != -1 )
+					{
+						if ( c == 8 ) { // <DEL>
+							if ( buffer.length() > 0 )
+							{
+								buffer.setLength( buffer.length() -1 );
+							} else {
+								Toolkit.getDefaultToolkit().beep(); // TODO: Play sample
+							}
+						} else if ( (c == 10 || c ==13 ) && buffer.length() > 0 ) { // <ENTER>
+							game.getHighscores().add( new HighscoreEntry( buffer.toString() , game.getPlayer().score ) );
+							game.setGameState(GameState.SHOW_HIGHSCORES);
+						} else {
+							if ( buffer.length() < 8 )
+							{
+								buffer.append( (char) c );
+							} else {
+								Toolkit.getDefaultToolkit().beep(); // TODO: Play sample
+							}
+						}
+					}
+				}
+			};
 		}
 	},
 	SHOW_HIGHSCORES
 	{
 		@Override
-		public void render(Game game)
+		public GameStateImpl newInstance()
 		{
-			game.render( g ->
+			return new GameStateImpl(SHOW_HIGHSCORES)
 			{
-				game.renderEntities(g);
-				game.renderHud(g);
-				game.renderHighscoreList(g);
-			});
-		}
+				@Override
+				public void render(Game game)
+				{
+					game.render( g ->
+					{
+						game.renderEntities(g);
+						game.renderHud(g);
+						game.renderHighscoreList(g);
+					});
+				}
 
-		@Override
-		public void tick(Game game)
-		{
-			game.processInput();
-		}
-
-		@Override
-		protected GameState[] getValidTransitions() {
-			return new GameState[]{ PLAYING };
+				@Override
+				public void tick(Game game,ITickContext ctx)
+				{
+					if ( game.getKeyboardInput().isPressed( KeyEvent.VK_ENTER) ) {
+						game.startGame();
+					}
+				}
+			};
 		}
 	};
-
-	private final Set<GameState> validStateTransitions;
-
-	private GameState()
-	{
-		final GameState[] valid = getValidTransitions();
-		if ( valid != null && valid.length > 0 ) {
-			this.validStateTransitions = Collections.unmodifiableSet( new HashSet<>( Arrays.asList( valid ) ) );
-		} else {
-			this.validStateTransitions = Collections.emptySet();
-		}
-	}
-
-	public abstract void tick(Game game);
-
-	public abstract void render(Game game);
-
-	protected abstract GameState[] getValidTransitions();
 
 	public final void assertTransitionValid(GameState newState) {
 		if ( ! isValidTransition(newState) ) {
@@ -122,11 +196,28 @@ public enum GameState
 		}
 	}
 
+	public GameState onEnter(GameState previousState, Game game) {
+		return this;
+	}
+
 	public final boolean isValidTransition(GameState newState)
 	{
 		if ( newState == null ) {
 			throw new IllegalArgumentException( "newState must not be NULL" );
 		}
-		return this.validStateTransitions.contains( newState );
+		switch (this) {
+			case ENTER_HIGHSCORE:
+				return newState.equals( SHOW_HIGHSCORES ) || newState.equals( PLAYING );
+			case GAME_OVER:
+				return newState.equals( PLAYING ) || newState.equals( SHOW_HIGHSCORES ) || newState.equals( ENTER_HIGHSCORE );
+			case PLAYING:
+				return newState.equals( GAME_OVER );
+			case SHOW_HIGHSCORES:
+				return newState.equals( PLAYING );
+			default:
+				return false;
+		}
 	}
+
+	public abstract GameStateImpl newInstance();
 }

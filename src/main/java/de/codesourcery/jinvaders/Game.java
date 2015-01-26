@@ -1,10 +1,25 @@
+/**
+ * Copyright 2015 Tobias Gierke <tobias.gierke@code-sourcery.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package de.codesourcery.jinvaders;
 
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.event.KeyEvent;
+import java.awt.Rectangle;
 import java.awt.font.LineMetrics;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
@@ -40,7 +55,7 @@ public final class Game extends JPanel
 
 	protected final List<HighscoreEntry> highscores = new ArrayList<>();
 
-	protected GameState stateOfGame = GameState.SHOW_HIGHSCORES;
+	protected GameStateImpl gameState = GameState.SHOW_HIGHSCORES.newInstance();
 
 	protected final Vec2d currentInvaderVelocity = new Vec2d(Constants.INITIAL_INVADER_VELOCITY);
 
@@ -163,22 +178,40 @@ public final class Game extends JPanel
 		addKeyListener(keyboardInput);
 	}
 
-	private void startGame() {
+	public List<HighscoreEntry> getHighscores() {
+		return highscores;
+	}
+
+	public Player getPlayer() {
+		return player;
+	}
+
+	public void startGame() {
 		setGameState( GameState.PLAYING );
-		reset();
 	}
 
 	public void setGameState(GameState newState)
 	{
-		this.stateOfGame.assertTransitionValid( newState );
-		this.stateOfGame = newState;
+		this.gameState.state.assertTransitionValid( newState );
+
+		GameState state = newState.onEnter( this.gameState.state , this );
+		while ( state != newState )
+		{
+			final GameState tmp = newState;
+			newState = state;
+			state = state.onEnter( tmp , this );
+		}
+		this.gameState = state.newInstance();
+
+		// flush keyboard buffer so new game state starts off with a clean slate
+		getKeyboardInput().flushKeyboardBuffer();
 	}
 
 	public KeyboardInput getKeyboardInput() {
 		return keyboardInput;
 	}
 
-	private void reset()
+	public void reset()
 	{
 		eligibleForBonus = true;
 		appStartTime=System.currentTimeMillis(); // time that application got started
@@ -245,40 +278,8 @@ public final class Game extends JPanel
 		invadersRemaining = Constants.INVADERS_PER_ROW * Constants.ROWS_OF_INVADERS;
 	}
 
-	public void processInput()
-	{
-		final ITickContext ctx = tickContext;
-		if ( stateOfGame == GameState.PLAYING )
-		{
-			if ( keyboardInput.isPressed(KeyEvent.VK_A) ) {
-				player.moveLeft( Constants.PLAYER_VELOCITY );
-			}
-			else if ( keyboardInput.isPressed( KeyEvent.VK_D ) ) {
-				player.moveRight( Constants.PLAYER_VELOCITY );
-			} else {
-				player.stop();
-			}
-			if ( keyboardInput.isPressed( KeyEvent.VK_SPACE ) )
-			{
-				player.shoot(ctx);
-			}
-		}
-		else if ( stateOfGame == GameState.SHOW_HIGHSCORES )
-		{
-			if ( keyboardInput.isPressed( KeyEvent.VK_ENTER) ) {
-				startGame();
-			}
-		}
-		else if ( stateOfGame == GameState.GAME_OVER )
-		{
-			if ( keyboardInput.isPressed( KeyEvent.VK_ENTER) ) {
-				startGame();
-			}
-		}
-	}
-
 	public GameState getGameState() {
-		return stateOfGame;
+		return gameState.state;
 	}
 
 	public void advanceGameState()
@@ -318,7 +319,7 @@ public final class Game extends JPanel
 			toRemove.addAll( collidingEntities );
 		}
 
-		if ( stateOfGame != GameState.GAME_OVER )
+		if ( gameState.state != GameState.GAME_OVER )
 		{
 			final List<Entity> destroyedInvaders = toRemove.stream().filter( Entity::isInvader ).collect(Collectors.toList() );
 			destroyedInvaders.forEach( e -> e.onHit(tickContext) );
@@ -423,7 +424,7 @@ public final class Game extends JPanel
 		{
 			if ( backgroundGraphics == null )
 			{
-				stateOfGame.render( this );
+				gameState.render( this );
 			}
 			g.drawImage( backgroundBuffer , 0 , 0 , null );
 			framesRendered++;
@@ -570,6 +571,31 @@ public final class Game extends JPanel
 		final int x0 = ( Constants.SCREEN_SIZE.width - width ) / 2;
 		final int y0 = ( Constants.SCREEN_SIZE.height - height) / 2;
 
+		final Rectangle2D stringBounds = renderCenteredTextWindow( "Highscores" ,x0,y0,width,height,g);
+
+		Collections.sort( highscores );
+
+		final int lineHeight = defaultFont.getSize()+6;
+		int y = (int) (y0 + stringBounds.getHeight() + lineHeight*2 );
+		for ( int i = 0 ; i < 10 ; i++ )
+		{
+			String text;
+			if ( i < highscores.size() ) {
+				text = highscores.get(i).toString();
+			} else {
+				text = new HighscoreEntry("",0).toString();
+			}
+			renderCenteredText(text, g, x0 , y  , width, lineHeight );
+			y += lineHeight;
+		}
+
+		y += lineHeight;
+		g.setColor( Color.RED );
+		renderCenteredText("Press <ENTER> to play", g, x0 , y  , width, lineHeight );
+	}
+
+	private Rectangle renderCenteredTextWindow(String text, int x0,int y0 , int width , int height ,Graphics2D g)
+	{
 		// clear window
 		g.setColor(Color.BLACK);
 		g.fillRect( x0 ,y0 , width , height );
@@ -579,31 +605,26 @@ public final class Game extends JPanel
 		g.drawRect( x0 ,y0 , width , height );
 
 		g.setFont( bigDefaultFont );
-		Rectangle2D rect = renderCenteredText( "High scores" , g , x0 , y0+10 , width , bigDefaultFont.getSize()+4 );
+		final Rectangle rect = renderCenteredText( text , g , x0 , y0+10 , width , bigDefaultFont.getSize()+4 );
 
 		g.setFont( defaultFont );
-
-		Collections.sort( highscores );
-		final int lineHeight = defaultFont.getSize()+6;
-		int y = (int) (y0 + rect.getHeight() + lineHeight*2 );
-		for ( int i = 0 ; i < 10 ; i++ )
-		{
-			String text;
-			if ( i < highscores.size() ) {
-				text = highscores.get(i).toString();
-			} else {
-				text = new HighscoreEntry("",0).toString();
-			}
-			rect = renderCenteredText(text, g, x0 , y  , width, lineHeight );
-			y += lineHeight;
-		}
-
-		y += lineHeight;
-		g.setColor( Color.RED );
-		renderCenteredText("Press <ENTER> to play", g, x0 , y  , width, lineHeight );
+		return rect;
 	}
 
-	private Rectangle2D renderCenteredText(String text, Graphics2D g, int x, int y , int width, int height ) {
+	public void renderEnterHighscore(Graphics2D g, String playerName,int score)
+	{
+		final int width = (int) (Constants.SCREEN_SIZE.width*0.7f);
+		final int height = (int) (Constants.SCREEN_SIZE.height*0.6f);
+
+		final int x0 = ( Constants.SCREEN_SIZE.width - width ) / 2;
+		final int y0 = ( Constants.SCREEN_SIZE.height - height) / 2;
+
+		final Rectangle rect = renderCenteredTextWindow( "New highscore" ,x0,y0,width,height,g);
+
+		g.drawString( HighscoreEntry.format( playerName,score ) , x0 , (int) (rect.getMaxY()+rect.getHeight()) );
+	}
+
+	private Rectangle renderCenteredText(String text, Graphics2D g, int x, int y , int width, int height ) {
 
 		final Rectangle2D metrics =  g.getFontMetrics().getStringBounds(text, g);
 
@@ -617,7 +638,8 @@ public final class Game extends JPanel
 		final int fontY = centerY - textHeight/2 + 1 + (int) metrics.getHeight();
 
 		g.drawString( text , fontX ,fontY);
-		return metrics;
+//		return new Rectangle(x, (int) (y + metrics.getY()) , (int) metrics.getWidth()  , (int) metrics.getHeight() );
+		return new Rectangle(x, y , (int) metrics.getWidth()  , (int) metrics.getHeight() );
 	}
 
 	private void removeEntity(Entity toRemove) {
@@ -635,9 +657,9 @@ public final class Game extends JPanel
 		currentTick++;
 
 		// advance game state
-		stateOfGame.tick(this);
+		gameState.tick(this , tickContext );
 
 		// update screen
-		stateOfGame.render(this);
+		gameState.render(this);
 	}
 }
