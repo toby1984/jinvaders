@@ -45,6 +45,7 @@ Here's a list of known issues I might (or might not) fix:
 
 - I didn't really bother with any performance optimizations since the game never dipped below 60 fps on my dated i5-2500k but there's plenty that could be done (remove object allocations, remove copying of entity references in main loop, replace lambdas/stream.filter() code with traditional loops,faster/smarter collision checking)
 - highscore screen looks kinda 'meh' , as well as the screen for entering your name
+- highscores currently do not get persisted
 - Main loop method is a mess since I kept adding features and didn't bother to clean it up
 - The algorithm that checks whether it's safe for an invader to shoot (making sure that none of its collegues is in the way)
   is quite naive and just makes sure that there's no other invader right below. Invaders might still get hit by
