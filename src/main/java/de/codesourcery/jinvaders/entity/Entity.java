@@ -1,0 +1,93 @@
+package de.codesourcery.jinvaders.entity;
+
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.util.Collection;
+
+import de.codesourcery.jinvaders.ITickListener;
+import de.codesourcery.jinvaders.graphics.Vec2d;
+
+public abstract class Entity implements ITickListener
+{
+	public final Vec2d position;
+	public final Vec2d velocity;
+	public final Vec2d size;
+
+	private EntityState state=EntityState.ALIVE;
+
+	public Entity(Vec2d position,Vec2d velocity,Vec2d size)
+	{
+		this.velocity = new Vec2d(velocity);
+		this.position = new Vec2d(position);
+		this.size = new Vec2d(size);
+	}
+
+	public void setState(EntityState newState)
+	{
+		if ( ! this.state.canTransitionTo( newState ) ) {
+			throw new IllegalStateException("Invalid state transition for entity "+this+": "+this.state+" -> "+newState);
+		}
+		this.state = newState;
+	}
+
+	public void onDispose() {
+	}
+
+	public void onHit(ITickContext ctd) {
+	}
+
+	public boolean isAlive() { return state == EntityState.ALIVE; }
+
+	public boolean isDying() { return state == EntityState.DYING; }
+
+	public boolean isDead() { return state == EntityState.DEAD; }
+
+	@Override
+	public String toString() { return getClass().getSimpleName()+" @ "+position; }
+
+	public boolean isInvader() { return this instanceof Invader; }
+	public boolean isPlayer() { return this instanceof Player; }
+	public boolean isBullet() { return this instanceof Bullet; }
+
+	public boolean isOutOfScreen(Rectangle r) {
+		return bottom() < r.y || top() > r.y+r.height|| right() < r.x || left() > r.x+r.width;
+	}
+
+	public void stop() { velocity.set(0,0); }
+	public int left() { return position.x; }
+	public int right() { return position.x+size.width(); }
+	public int top() { return position.y; }
+	public int bottom() { return position.y+size.height(); }
+
+	public boolean isAbove(int y) { return bottom() < y; }
+	public boolean isBelow(int y) { return top() > y; }
+	public boolean isLeftOf(int x) { return right() < x; }
+	public boolean isRightOf(int x) { return left() > x; }
+
+	public boolean isAbove(Entity e) { return isAbove( e.top() ); }
+	public boolean isBelow(Entity e) { return isBelow( e.bottom() ); }
+	public boolean isLeftOf(Entity e) { return isLeftOf( e.left() ); }
+	public boolean isRightOf(Entity e) { return isRightOf( e.right() ); }
+
+	public boolean isMovingUp() { return velocity.y < 0; }
+	public boolean isMovingDown() { return velocity.y > 0; }
+
+	public boolean collidesWith(Collection<Entity> others) { return others.stream().anyMatch( this::collides ); }
+
+	public boolean canCollide() { return isAlive(); }
+
+	public boolean collides(Entity other) { return this != other &&
+			other.canCollide() &
+			this.canCollide() &&
+			!(isAbove(other) || isBelow(other) || isLeftOf(other) || isRightOf(other ) ); }
+
+	public void moveLeft(int vx) { this.velocity.x = -vx; };
+	public void moveRight(int vx) { this.velocity.x = vx; };
+
+	@Override
+	public void tick(ITickContext context) {
+		position.add( velocity );
+	}
+
+	public abstract void render(Graphics2D graphics);
+}
