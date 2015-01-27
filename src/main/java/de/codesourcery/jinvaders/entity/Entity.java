@@ -15,11 +15,11 @@
  */
 package de.codesourcery.jinvaders.entity;
 
-import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.util.Collection;
 
 import de.codesourcery.jinvaders.ITickListener;
+import de.codesourcery.jinvaders.graphics.IRenderer;
 import de.codesourcery.jinvaders.graphics.Vec2d;
 
 public abstract class Entity implements ITickListener, Comparable<Entity>
@@ -128,5 +128,5 @@ public abstract class Entity implements ITickListener, Comparable<Entity>
 		return 0;
 	}
 
-	public abstract void render(Graphics2D graphics);
+	public abstract void render(IRenderer graphics);
 }

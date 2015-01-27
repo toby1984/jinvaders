@@ -15,27 +15,23 @@
  */
 package de.codesourcery.jinvaders.entity;
 
-import java.awt.Graphics2D;
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
 import java.util.function.Function;
 
+import de.codesourcery.jinvaders.graphics.IRenderer;
+import de.codesourcery.jinvaders.graphics.ImageHolder;
 import de.codesourcery.jinvaders.graphics.Sprite;
 import de.codesourcery.jinvaders.graphics.Vec2d;
 
 public final class Barricade extends Entity {
 
-	private final BufferedImage sprite;
+	private final ImageHolder sprite;
 
 	public Barricade(Vec2d position,Sprite sprite)
 	{
 		super(position, Vec2d.ZERO, sprite.size() );
-
 		// copy sprite since we're going to write to it later on
-		this.sprite = new BufferedImage( sprite.size().width() , sprite.size().height() , sprite.image().getType());
-		final Graphics2D graphics = this.sprite.createGraphics();
-		graphics.drawImage( sprite.image() , 0 , 0 , null );
-		graphics.dispose();
+		this.sprite = sprite.image().createCopy();
 	}
 
 	@Override
@@ -103,8 +99,8 @@ public final class Barricade extends Entity {
 	}
 
 	@Override
-	public void render(Graphics2D graphics)
+	public void render(IRenderer graphics)
 	{
-		graphics.drawImage( sprite , position.x ,position.y , null );
+		graphics.renderImage( sprite , position.x ,position.y );
 	}
 }

@@ -15,8 +15,15 @@
  */
 package de.codesourcery.jinvaders.graphics;
 
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.imageio.ImageIO;
+
+import de.codesourcery.jinvaders.Main;
 
 public class SpriteRepository {
 
@@ -43,8 +50,19 @@ public class SpriteRepository {
 			// entities with lower priority values get rendered first
 			// draw bullets first so any collision detection glitches etc. will just paint over the bullet  ;)
 			final int renderingPrio = (key == SpriteImpl.INVADER_BULLET || key == SpriteImpl.PLAYER_BULLET ) ? 0 : 10;
-			spritesByKey.put( key , new SimpleSprite( resource , renderingPrio  ) );
+			spritesByKey.put( key , new SimpleSprite( loadSprite( resource ) , renderingPrio  ) );
 		});
+	}
+
+	private ImageHolder loadSprite(String resource)
+	{
+		final InputStream in = Main.class.getResourceAsStream(resource);
+		try {
+			final BufferedImage image = ImageIO.read( in );
+			return ImageHolder.newAWT( image );
+		} catch (final IOException e) {
+			throw new RuntimeException("Failed to load sprite '"+resource+"'");
+		}
 	}
 
 	public Sprite getSprite(SpriteKey key)

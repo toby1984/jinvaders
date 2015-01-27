@@ -35,7 +35,13 @@ public abstract class ITickContext
 
 	public abstract void destroyEntity(Entity e);
 
-	public abstract int getCurrentTick();
+	/**
+	 *
+	 * @return
+	 * @deprecated will be removed. Use {@link #getElapsedTimeInSeconds()} instead.
+	 */
+	@Deprecated
+	public abstract int getCurrentTick(); // FIXME: REMOVE METHOD
 
 	public abstract Sprite getSprite(SpriteKey sprite);
 }

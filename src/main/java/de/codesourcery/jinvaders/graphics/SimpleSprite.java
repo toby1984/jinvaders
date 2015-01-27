@@ -15,18 +15,10 @@
  */
 package de.codesourcery.jinvaders.graphics;
 
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.InputStream;
-
-import javax.imageio.ImageIO;
-
-import de.codesourcery.jinvaders.Main;
 
 public class SimpleSprite implements Sprite
 {
-	private final BufferedImage image;
+	private final ImageHolder image;
 	private final Vec2d size;
 	private final int renderingPriority;
 
@@ -35,16 +27,11 @@ public class SimpleSprite implements Sprite
 	 * @param resource
 	 * @param renderingPriority Entities with higher priority values are drawn later.
 	 */
-	public SimpleSprite(String resource,int renderingPriority)
+	public SimpleSprite(ImageHolder resource,int renderingPriority)
 	{
 		this.renderingPriority = renderingPriority;
-		final InputStream in = Main.class.getResourceAsStream(resource);
-		try {
-			image = ImageIO.read( in );
-			size = new Vec2d( image.getWidth() , image.getHeight() );
-		} catch (final IOException e) {
-			throw new RuntimeException("Failed to load sprite '"+resource+"'");
-		}
+		this.image = resource;
+		this.size = new Vec2d( resource.getWidth() , resource.getHeight() );
 	}
 
 	@Override
@@ -53,22 +40,22 @@ public class SimpleSprite implements Sprite
 	}
 
 	@Override
-	public void render(Graphics2D graphics,Vec2d position)
+	public void render(IRenderer graphics,Vec2d position)
 	{
 		render(graphics,position.x,position.y);
 	}
 
 	@Override
-	public void render(Graphics2D graphics,int x,int y)
+	public void render(IRenderer graphics,int x,int y)
 	{
-		graphics.drawImage( image , x , y , null );
+		graphics.renderImage( image , x , y );
 	}
 
 	@Override
 	public Vec2d size() { return size; }
 
 	@Override
-	public BufferedImage image() { return image; }
+	public ImageHolder image() { return image; }
 
 	@Override
 	public ISpriteProvider next() {

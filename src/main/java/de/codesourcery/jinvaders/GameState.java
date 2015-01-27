@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import de.codesourcery.jinvaders.entity.ITickContext;
 import de.codesourcery.jinvaders.entity.Player;
+import de.codesourcery.jinvaders.graphics.UITheme;
 import de.codesourcery.jinvaders.util.KeyboardInput;
 
 public enum GameState
@@ -33,12 +34,12 @@ public enum GameState
 			return new GameStateImpl(PLAYING)
 			{
 				@Override
-				public void render(Game game)
+				public void render(Game game, UITheme ui)
 				{
 					game.render( g ->
 					{
-						game.renderEntities(g);
-						game.renderHud(g);
+						ui.renderEntities(g);
+						ui.renderHud(g);
 					});
 				}
 
@@ -80,13 +81,13 @@ public enum GameState
 			return new GameStateImpl(GAME_OVER)
 			{
 				@Override
-				public void render(Game game)
+				public void render(Game game, UITheme ui)
 				{
 					game.render( g ->
 					{
-						game.renderEntities(g);
-						game.renderHud(g);
-						game.renderGameOverText(g);
+						ui.renderEntities(g);
+						ui.renderHud(g);
+						ui.renderGameOverText(g);
 					});
 				}
 
@@ -122,13 +123,13 @@ public enum GameState
 				private final StringBuilder buffer = new StringBuilder();
 
 				@Override
-				public void render(Game game)
+				public void render(Game game, UITheme ui)
 				{
 					game.render( g ->
 					{
-						game.renderEntities(g);
-						game.renderHud(g);
-						game.renderEnterHighscore(g,buffer.toString(),game.getPlayer().score);
+						ui.renderEntities(g);
+						ui.renderHud(g);
+						ui.renderEnterHighscore( buffer.toString(),game.getPlayer().score,g);
 					});
 				}
 
@@ -169,13 +170,13 @@ public enum GameState
 			return new GameStateImpl(SHOW_HIGHSCORES)
 			{
 				@Override
-				public void render(Game game)
+				public void render(Game game,UITheme ui)
 				{
 					game.render( g ->
 					{
-						game.renderEntities(g);
-						game.renderHud(g);
-						game.renderHighscoreList(g);
+						ui.renderEntities(g);
+						ui.renderHud(g);
+						ui.renderHighscoreList(g);
 					});
 				}
 

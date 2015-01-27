@@ -1,10 +1,9 @@
 package de.codesourcery.jinvaders.entity;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
 import java.util.List;
 import java.util.Random;
 
+import de.codesourcery.jinvaders.graphics.IRenderer;
 import de.codesourcery.jinvaders.graphics.Vec2d;
 import de.codesourcery.jinvaders.particles.Particle;
 import de.codesourcery.jinvaders.particles.ParticlePool;
@@ -148,9 +147,9 @@ public final class ParticleSystem extends Entity
 	}
 
 	@Override
-	public void render(Graphics2D graphics)
+	public void render(IRenderer graphics)
 	{
-		graphics.setColor(Color.RED);
+		graphics.setColor( 0xee0000 ); // RED
 
 		final Particle[] array = pool.particlePool;
 		final int len = allocated.size();

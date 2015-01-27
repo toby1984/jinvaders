@@ -18,11 +18,13 @@ package de.codesourcery.jinvaders;
 import javax.swing.JFrame;
 import javax.swing.Timer;
 
+import de.codesourcery.jinvaders.graphics.AWTRenderer;
+
 public class Main
 {
 	public static void main(String[] args)
 	{
-		final Game game = new Game();
+		final Game game = new Game( new AWTRenderer() );
 
 		// setup game screen
 		final JFrame frame = new JFrame("JavaInvaders");

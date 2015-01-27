@@ -15,9 +15,8 @@
  */
 package de.codesourcery.jinvaders.entity;
 
-import java.awt.Graphics2D;
-
 import de.codesourcery.jinvaders.graphics.FlashingAnimator;
+import de.codesourcery.jinvaders.graphics.IRenderer;
 import de.codesourcery.jinvaders.graphics.ISpriteProvider;
 import de.codesourcery.jinvaders.graphics.Sprite;
 import de.codesourcery.jinvaders.graphics.Vec2d;
@@ -108,7 +107,7 @@ public abstract class SpriteHoldingEntity extends Entity implements ISpriteProvi
 	}
 
 	@Override
-	public final void render(Graphics2D graphics) {
+	public final void render(IRenderer graphics) {
 		spriteProvider.getSprite().render( graphics , position );
 	}
 }

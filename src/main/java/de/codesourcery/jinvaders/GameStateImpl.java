@@ -1,6 +1,7 @@
 package de.codesourcery.jinvaders;
 
 import de.codesourcery.jinvaders.entity.ITickContext;
+import de.codesourcery.jinvaders.graphics.UITheme;
 
 public abstract class GameStateImpl
 {
@@ -16,5 +17,5 @@ public abstract class GameStateImpl
 
 	public abstract void tick(Game game,ITickContext ctx);
 
-	public abstract void render(Game game);
+	public abstract void render(Game game, UITheme ui);
 }

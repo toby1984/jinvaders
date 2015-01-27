@@ -15,10 +15,6 @@
  */
 package de.codesourcery.jinvaders.graphics;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-
 import de.codesourcery.jinvaders.ITickListener;
 import de.codesourcery.jinvaders.entity.ITickContext;
 
@@ -38,14 +34,14 @@ public final class FlashingAnimator implements ITickListener , ISpriteProvider {
 		public Vec2d size() { return spriteProvider.getSprite().size(); }
 
 		@Override
-		public BufferedImage image() { throw new UnsupportedOperationException("image() not implemented"); }
+		public ImageHolder image() { throw new UnsupportedOperationException("image() not implemented"); }
 
 		@Override
-		public void render(Graphics2D graphics, Vec2d position) { render(graphics,position.x,position.y); }
+		public void render(IRenderer graphics, Vec2d position) { render(graphics,position.x,position.y); }
 
 		@Override
-		public void render(Graphics2D graphics, int x, int y) {
-			graphics.setColor( Color.BLACK );
+		public void render(IRenderer graphics, int x, int y) {
+			graphics.setColor( 0 ); // BLACK
 			graphics.fillRect(x, y ,  size().width() ,  size().height() );
 		}
 
