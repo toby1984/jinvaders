@@ -20,7 +20,7 @@ public enum EntityState
 	ALIVE{
 		@Override
 		public boolean canTransitionTo(EntityState other) {
-			return other == DYING;
+			return other == DYING || other == DEAD;
 		}
 	},
 	DYING{

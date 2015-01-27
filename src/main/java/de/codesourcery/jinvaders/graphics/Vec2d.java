@@ -17,10 +17,13 @@ package de.codesourcery.jinvaders.graphics;
 
 public final class Vec2d
 {
-	public static final Vec2d ZERO = new Vec2d(0,0);
+	public static final Vec2d ZERO = new Vec2d();
 
 	public int x;
 	public int y;
+
+	public Vec2d() {
+	}
 
 	public Vec2d(Vec2d other) { x = other.x ; y = other.y; }
 
@@ -40,4 +43,20 @@ public final class Vec2d
 
 	@Override
 	public String toString() { return "( "+x+" , "+y+" )"; }
+
+	@Override
+	public int hashCode()
+	{
+		return 31 * (31 + x) + y;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (obj instanceof Vec2d)
+		{
+			Vec2d other = (Vec2d) obj;
+			return this.x == other.x && this.y == other.y;
+		}
+		return false;
+	}
 }

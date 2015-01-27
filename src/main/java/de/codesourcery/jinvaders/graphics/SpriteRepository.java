@@ -40,7 +40,10 @@ public class SpriteRepository {
 	{
 		keyToFile.forEach( (key,resource) ->
 		{
-			spritesByKey.put( key , new SimpleSprite( resource ) );
+			// entities with lower priority values get rendered first
+			// draw bullets first so any collision detection glitches etc. will just paint over the bullet  ;)
+			final int renderingPrio = (key == SpriteImpl.INVADER_BULLET || key == SpriteImpl.PLAYER_BULLET ) ? 0 : 10;
+			spritesByKey.put( key , new SimpleSprite( resource , renderingPrio  ) );
 		});
 	}
 

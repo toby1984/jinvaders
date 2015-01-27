@@ -40,15 +40,17 @@ public class Main
 		game.requestFocus();
 
 		// main game loop
+		long time1 = System.nanoTime();
 		while(true)
 		{
 			// busy-wait until EDT has redrawn screen
 			// (spinning is wasteful but rendering shouldn't take long
 			// and using a lock & wait() here will probably be more costly because of
 			// context switching)
-			while( ! game.screenRendered.compareAndSet(true,false) ) { }
-
-			game.tick();
+			while( ! game.screenRendered.compareAndSet(true,false) ) {}
+			final long time2 = System.nanoTime();
+			game.tick( (time2-time1)/1_000_000_000f );
+			time1 = System.nanoTime();
 		}
 	}
 }

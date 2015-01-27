@@ -23,6 +23,8 @@ import de.codesourcery.jinvaders.graphics.SpriteKey;
 
 public abstract class ITickContext
 {
+	public abstract float getElapsedTimeInSeconds();
+
 	public abstract void addTickListener(ITickListener listener);
 
 	public abstract void removeTickListener(ITickListener listener);

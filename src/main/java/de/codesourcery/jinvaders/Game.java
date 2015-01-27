@@ -40,12 +40,15 @@ import de.codesourcery.jinvaders.entity.Bullet;
 import de.codesourcery.jinvaders.entity.Entity;
 import de.codesourcery.jinvaders.entity.ITickContext;
 import de.codesourcery.jinvaders.entity.Invader;
+import de.codesourcery.jinvaders.entity.ParticleSystem;
+import de.codesourcery.jinvaders.entity.ParticleSystem.ParticleEffect;
 import de.codesourcery.jinvaders.entity.Player;
 import de.codesourcery.jinvaders.graphics.Sprite;
 import de.codesourcery.jinvaders.graphics.SpriteImpl;
 import de.codesourcery.jinvaders.graphics.SpriteKey;
 import de.codesourcery.jinvaders.graphics.SpriteRepository;
 import de.codesourcery.jinvaders.graphics.Vec2d;
+import de.codesourcery.jinvaders.particles.ParticlePool;
 import de.codesourcery.jinvaders.sound.SoundEffect;
 import de.codesourcery.jinvaders.util.KeyboardInput;
 
@@ -78,6 +81,7 @@ public final class Game extends JPanel
 
 	// the current tick
 	protected int currentTick;
+	protected float elapsedTimeInSeconds;
 
 	// the current difficulty level
 	protected int difficulty = 1;
@@ -100,6 +104,8 @@ public final class Game extends JPanel
 	private final Font defaultFont;
 	private final Font bigDefaultFont;
 	private final Font gameOverFont;
+
+	private final ParticlePool particlePool = new ParticlePool(1000);
 
 	// FPS calculation stuff
 	private long appStartTime=System.currentTimeMillis(); // time that application got started
@@ -147,6 +153,11 @@ public final class Game extends JPanel
 		@Override
 		public Sprite getSprite(SpriteKey key) {
 			return spriteRepository.getSprite( key );
+		}
+
+		@Override
+		public float getElapsedTimeInSeconds() {
+			return elapsedTimeInSeconds;
 		}
 	};
 
@@ -230,15 +241,19 @@ public final class Game extends JPanel
 		final int playerY = Constants.VIEWPORT.y + Constants.VIEWPORT.height - playerSprite.size().height();
 		player = new Player( new Vec2d( playerX , playerY ) , playerSprite );
 
-		nonStaticEntities.clear();
+		pureTickListeners.clear();
 
+		nonStaticEntities.forEach( Entity::onDispose );
+		nonStaticEntities.clear();
 		nonStaticEntities.add( player );
+
 		spawnInvaders();
 		spawnBarricades();
 	}
 
 	private void spawnBarricades()
 	{
+		barricades.forEach( Entity::onDispose );
 		barricades.clear();
 
 		final int widthPerBarricade = Constants.VIEWPORT.width/ Constants.BARRICADE_COUNT;
@@ -285,7 +300,13 @@ public final class Game extends JPanel
 	public void advanceGameState()
 	{
 		// remove dead entities
-		nonStaticEntities.removeIf( Entity::isDead );
+		nonStaticEntities.removeIf( entity -> {
+			if ( entity.isDead() ) {
+				entity.onDispose();
+				return true;
+			}
+			return false;
+		});
 
 		maybeFlipInvaderMovementDirection();
 
@@ -300,7 +321,7 @@ public final class Game extends JPanel
 		final List<Entity> collidingEntities = nonStaticEntities.stream().filter( a -> a.isAlive() && a.collidesWith(nonStaticEntities) ).collect(Collectors.toList());
 
 		// find entities that are off-screen
-		final List<Entity> toRemove = nonStaticEntities.stream().filter( entity -> entity.isOutOfScreen( Constants.VIEWPORT )  ).collect(Collectors.toList());
+		final List<Entity> toRemove = nonStaticEntities.stream().filter( entity -> entity.destroyWhenOffScreen() & entity.isOffScreen( Constants.VIEWPORT )  ).collect(Collectors.toList());
 
 		if ( collidingEntities.contains( player ) ) // must be player <-> bullet collision
 		{
@@ -324,6 +345,11 @@ public final class Game extends JPanel
 			final List<Entity> destroyedInvaders = toRemove.stream().filter( Entity::isInvader ).collect(Collectors.toList() );
 			destroyedInvaders.forEach( e -> e.onHit(tickContext) );
 
+			destroyedInvaders.forEach( invader ->
+			{
+				final ParticleEffect effect = new ParticleEffect( invader.position , 100 , 0.6f );
+				nonStaticEntities.add( new ParticleSystem( particlePool , effect ) );
+			});
 			toRemove.removeIf( e -> e.isInvader() & ! e.isDead() );
 
 			final long invadersDestroyed = destroyedInvaders.size();
@@ -470,7 +496,12 @@ public final class Game extends JPanel
 	public void renderEntities(Graphics2D g)
 	{
 		// render all game entities
+
+		// sort entities by draw order
+		Collections.sort( nonStaticEntities);
 		nonStaticEntities.forEach( e -> e.render(backgroundGraphics) );
+
+		// sort by draw order
 		barricades.forEach( e -> e.render(backgroundGraphics ) );
 	}
 
@@ -652,9 +683,11 @@ public final class Game extends JPanel
 		nonStaticEntities.removeAll( toRemove );
 	}
 
-	public void tick()
+	public void tick(float elapsedSeconds)
 	{
 		currentTick++;
+
+		elapsedTimeInSeconds = elapsedSeconds;
 
 		// advance game state
 		gameState.tick(this , tickContext );

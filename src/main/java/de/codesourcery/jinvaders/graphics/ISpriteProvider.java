@@ -15,9 +15,17 @@
  */
 package de.codesourcery.jinvaders.graphics;
 
-public interface ISpriteHolder {
+public interface ISpriteProvider {
 
 	public Sprite getSprite();
 
-	public void setSprite(Sprite sprite);
+	public ISpriteProvider next();
+
+	public void setNext(ISpriteProvider next);
+
+	/**
+	 * Entities with higher priority values are drawn later.
+	 * @return
+	 */
+	public int getRenderingPriority();
 }

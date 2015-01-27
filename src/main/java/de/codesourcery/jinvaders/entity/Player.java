@@ -36,7 +36,7 @@ public final class Player extends SpriteHoldingEntity
 	public void tick(ITickContext ctx)
 	{
 		super.tick(ctx);
-		if ( isOutOfScreen( Constants.VIEWPORT ) ) {
+		if ( isOffScreen( Constants.VIEWPORT ) ) {
 			velocity.x = -velocity.x;
 			position.add( velocity );
 		}
@@ -47,7 +47,7 @@ public final class Player extends SpriteHoldingEntity
 	{
 		lifes--;
 		if ( lifes > 0 ) {
-			flash( ctx );
+			flash( ctx , 60 );
 		}
 	}
 

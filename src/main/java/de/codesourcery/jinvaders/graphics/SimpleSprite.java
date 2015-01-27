@@ -28,9 +28,16 @@ public class SimpleSprite implements Sprite
 {
 	private final BufferedImage image;
 	private final Vec2d size;
+	private final int renderingPriority;
 
-	public SimpleSprite(String resource)
+	/**
+	 *
+	 * @param resource
+	 * @param renderingPriority Entities with higher priority values are drawn later.
+	 */
+	public SimpleSprite(String resource,int renderingPriority)
 	{
+		this.renderingPriority = renderingPriority;
 		final InputStream in = Main.class.getResourceAsStream(resource);
 		try {
 			image = ImageIO.read( in );
@@ -38,6 +45,11 @@ public class SimpleSprite implements Sprite
 		} catch (final IOException e) {
 			throw new RuntimeException("Failed to load sprite '"+resource+"'");
 		}
+	}
+
+	@Override
+	public Sprite getSprite() {
+		return this;
 	}
 
 	@Override
@@ -57,4 +69,19 @@ public class SimpleSprite implements Sprite
 
 	@Override
 	public BufferedImage image() { return image; }
+
+	@Override
+	public ISpriteProvider next() {
+		return null;
+	}
+
+	@Override
+	public void setNext(ISpriteProvider next) {
+		throw new UnsupportedOperationException("setNext() not supported");
+	}
+
+	@Override
+	public int getRenderingPriority() {
+		return renderingPriority;
+	}
 }

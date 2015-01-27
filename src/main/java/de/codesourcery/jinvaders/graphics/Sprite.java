@@ -18,7 +18,7 @@ package de.codesourcery.jinvaders.graphics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 
-public interface Sprite
+public interface Sprite extends ISpriteProvider
 {
 	public Vec2d size();
 

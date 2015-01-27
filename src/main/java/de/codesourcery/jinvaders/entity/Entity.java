@@ -22,7 +22,7 @@ import java.util.Collection;
 import de.codesourcery.jinvaders.ITickListener;
 import de.codesourcery.jinvaders.graphics.Vec2d;
 
-public abstract class Entity implements ITickListener
+public abstract class Entity implements ITickListener, Comparable<Entity>
 {
 	public final Vec2d position;
 	public final Vec2d velocity;
@@ -58,13 +58,13 @@ public abstract class Entity implements ITickListener
 	public boolean isDead() { return state == EntityState.DEAD; }
 
 	@Override
-	public String toString() { return getClass().getSimpleName()+" @ "+position; }
+	public String toString() { return getClass().getName()+" @ "+position; }
 
 	public boolean isInvader() { return this instanceof Invader; }
 	public boolean isPlayer() { return this instanceof Player; }
 	public boolean isBullet() { return this instanceof Bullet; }
 
-	public boolean isOutOfScreen(Rectangle r) {
+	public boolean isOffScreen(Rectangle r) {
 		return bottom() < r.y || top() > r.y+r.height|| right() < r.x || left() > r.x+r.width;
 	}
 
@@ -91,9 +91,11 @@ public abstract class Entity implements ITickListener
 
 	public boolean canCollide() { return isAlive(); }
 
+	public boolean destroyWhenOffScreen() { return true; }
+
 	public boolean collides(Entity other) { return this != other &&
-			other.canCollide() &
-			this.canCollide() &&
+			this.canCollide() &
+			other.canCollide() &&
 			!(isAbove(other) || isBelow(other) || isLeftOf(other) || isRightOf(other ) ); }
 
 	public void moveLeft(int vx) { this.velocity.x = -vx; };
@@ -102,6 +104,28 @@ public abstract class Entity implements ITickListener
 	@Override
 	public void tick(ITickContext context) {
 		position.add( velocity );
+	}
+
+	/**
+	 * Entities with higher priority values are drawn later.
+	 * @return
+	 */
+	public int getRenderingPriority() {
+		return 0;
+	}
+
+	@Override
+	public final int compareTo(Entity o)
+	{
+		final int o1 = getRenderingPriority();
+		final int o2 = o.getRenderingPriority();
+		if ( o1 < o2 ) {
+			return -1;
+		}
+		if ( o1 > o2 ) {
+			return 1;
+		}
+		return 0;
 	}
 
 	public abstract void render(Graphics2D graphics);

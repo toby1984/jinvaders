@@ -18,52 +18,97 @@ package de.codesourcery.jinvaders.entity;
 import java.awt.Graphics2D;
 
 import de.codesourcery.jinvaders.graphics.FlashingAnimator;
-import de.codesourcery.jinvaders.graphics.ISpriteHolder;
+import de.codesourcery.jinvaders.graphics.ISpriteProvider;
 import de.codesourcery.jinvaders.graphics.Sprite;
 import de.codesourcery.jinvaders.graphics.Vec2d;
 
-public abstract class SpriteHoldingEntity extends Entity implements ISpriteHolder
+public abstract class SpriteHoldingEntity extends Entity implements ISpriteProvider
 {
-	private FlashingAnimator animator;
-	private Sprite sprite;
+	private ISpriteProvider spriteProvider;
 
 	public SpriteHoldingEntity(Vec2d position, Vec2d velocity, Sprite sprite) {
 		super(position, velocity, sprite.size() );
-		this.sprite = sprite;
+		this.spriteProvider = sprite;
 	}
 
 	@Override
 	public final Sprite getSprite() {
-		return sprite;
+		return spriteProvider.getSprite();
 	}
 
 	@Override
-	public final void setSprite(Sprite sprite) {
-		this.sprite = sprite;
+	public ISpriteProvider next() {
+		return spriteProvider.next();
 	}
 
-	private boolean isNotFlashing() {
-		return animator == null || ! animator.isFlashing;
+	@Override
+	public void setNext(ISpriteProvider next) {
+		this.spriteProvider = next;
 	}
 
-	public final void flash(final ITickContext ctx)
+	protected final <T extends ISpriteProvider> T findSpriteProvider(Class<T> clazz)
 	{
-		if ( isNotFlashing() )
+		ISpriteProvider current = spriteProvider;
+		while( current != null )
 		{
-			animator = FlashingAnimator.create( ctx , this );
+			if ( clazz.isAssignableFrom( current.getClass() ) ) {
+				return (T) current;
+			}
+			current = current.next();
+		}
+		return null;
+	}
+
+	protected <T extends ISpriteProvider> void removeSpriteProvider(Class<T> clazz) {
+
+		ISpriteProvider previous = this;
+		ISpriteProvider current = this.spriteProvider;
+		while( current != null )
+		{
+			if ( clazz.isAssignableFrom( current.getClass() ) )
+			{
+				previous.setNext( current.next() );
+			} else {
+				previous = current;
+			}
+			current = current.next();
 		}
 	}
 
-	public final void flash(final ITickContext ctx,Runnable callbackToExecuteAfterFlashing)
+	protected void addSpriteProvider(ISpriteProvider toAdd)
+	{
+		toAdd.setNext( spriteProvider );
+		spriteProvider = toAdd;
+	}
+
+	protected final boolean isNotFlashing()
+	{
+		final FlashingAnimator current = findSpriteProvider(FlashingAnimator.class);
+		return current == null || (current != null && ! current.isFlashing());
+	}
+
+	public final void flash(final ITickContext ctx,int lifetimeInTicks)
+	{
+		flash(ctx,lifetimeInTicks,null);
+	}
+
+	public final void flash(final ITickContext ctx,int lifetimeInTicks,Runnable callbackToExecuteAfterFlashing)
 	{
 		if ( isNotFlashing() )
 		{
-			animator = FlashingAnimator.create( ctx , this , callbackToExecuteAfterFlashing );
+			final Runnable onStop = () ->
+			{
+				removeSpriteProvider( FlashingAnimator.class );
+				if ( callbackToExecuteAfterFlashing != null ) {
+					callbackToExecuteAfterFlashing.run();
+				}
+			};
+			addSpriteProvider( FlashingAnimator.create( ctx , this , onStop,5,lifetimeInTicks ) );
 		}
 	}
 
 	@Override
 	public final void render(Graphics2D graphics) {
-		sprite.render( graphics , position );
+		spriteProvider.getSprite().render( graphics , position );
 	}
 }

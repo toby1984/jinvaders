@@ -38,6 +38,11 @@ public final class Barricade extends Entity {
 		graphics.dispose();
 	}
 
+	@Override
+	public boolean destroyWhenOffScreen() {
+		return false;
+	}
+
 	public boolean hitBy(Bullet entity)
 	{
 		if ( ! collides( entity) ) {

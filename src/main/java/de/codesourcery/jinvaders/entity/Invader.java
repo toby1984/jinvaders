@@ -35,7 +35,7 @@ public final class Invader extends SpriteHoldingEntity
 	public void onHit(ITickContext ctx)
 	{
 		setState( EntityState.DYING );
-		flash(ctx, () -> setState(EntityState.DEAD ) );
+		flash(ctx, 30 , () -> setState(EntityState.DEAD ) );
 	}
 
 	@Override
