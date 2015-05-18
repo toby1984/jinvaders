@@ -213,6 +213,7 @@ public final class Game extends JPanel
 		player = new Player( new Vec2d( playerX , playerY ) , playerSprite );
 
 		pureTickListeners.clear();
+		pureTickListeners.add( uiTheme );
 
 		nonStaticEntities.forEach( Entity::onDispose );
 		nonStaticEntities.clear();

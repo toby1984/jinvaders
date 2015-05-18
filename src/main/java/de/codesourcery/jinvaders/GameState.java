@@ -38,6 +38,7 @@ public enum GameState
 				{
 					game.render( g ->
 					{
+						ui.renderBackground(g);
 						ui.renderEntities(g);
 						ui.renderHud(g);
 					});
@@ -85,6 +86,7 @@ public enum GameState
 				{
 					game.render( g ->
 					{
+						ui.renderBackground(g);
 						ui.renderEntities(g);
 						ui.renderHud(g);
 						ui.renderGameOverText(g);
@@ -127,6 +129,7 @@ public enum GameState
 				{
 					game.render( g ->
 					{
+						ui.renderBackground(g);
 						ui.renderEntities(g);
 						ui.renderHud(g);
 						ui.renderEnterHighscore( buffer.toString(),game.getPlayer().score,g);
@@ -174,6 +177,7 @@ public enum GameState
 				{
 					game.render( g ->
 					{
+						ui.renderBackground(g);
 						ui.renderEntities(g);
 						ui.renderHud(g);
 						ui.renderHighscoreList(g);
